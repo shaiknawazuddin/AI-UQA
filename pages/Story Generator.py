@@ -1,9 +1,10 @@
 import streamlit as st
 import pandas as pd
 import openai
-from fpdf import FPDF
+from docx import Document
 import zipfile
 import os
+import time
 from io import BytesIO
 
 
@@ -51,15 +52,22 @@ st.title("Story Generator :thought_balloon:")
 
 st.sidebar.title('Input method')
 
-def save_pdf(title, content):
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.set_auto_page_break(auto=True, margin=15)
-    pdf.set_font("Arial", size=12)
-    pdf.multi_cell(0, 10, content.encode('latin-1', 'replace').decode('latin-1'))  # Encode/Decode to handle special characters
-    pdf_file = f"{title}.pdf"
-    pdf.output(pdf_file)
-    return pdf_file
+def save_word_docx(filename, content):
+    doc = Document()
+    title_list = str(filename).split('_')
+    title = ' '.join(title_list)
+
+    doc.add_heading(title, 0)
+
+    # Convert content to utf-8 to handle special characters
+    content_utf = content.encode('latin-1', 'replace').decode('utf-8')
+
+    doc.add_paragraph(content_utf)
+
+    docx_file = f"{filename}.docx"
+    doc.save(docx_file)
+
+    return docx_file
 
 # Backend Code 1 -- End
 
@@ -86,6 +94,7 @@ def upload_and_process_file():
 # Backend Code 2 -- Start
 
 def output_code(gpt_version, df):
+    code_start = time.time()
     if df is not None:
         if gpt_version == "GPT 3.5":
             model = "gpt-3.5-turbo"
@@ -93,28 +102,30 @@ def output_code(gpt_version, df):
             model = "gpt-4.0-turbo"
         story_list = []
         df = df.rename(columns = {df.columns[0] : 'Surah Number'})
-        pdf_files = []  # Keep track of generated PDF files
+        docx_files = []  # Keep track of generated Word files
 
         for index, row in df.iterrows():
             theme = row['Surah Number']  # Assuming 'Column 1' contains the Quran portion
+            file_name_list = str(theme).split(' ')
+            file_name = '_'.join(file_name_list)
             content = f"""You are an expert Islamic story writer. Your job is to support the user in accomplishing the goal of writing stories for kids of 5 to 7 years of age on different verses or themes of the Quran. The stories should be between 250 to 300 words.
 Follow these steps:
 1.Write a motivating, inspiring story that is central to the theme or the message present in the verses
 2.Proof read the story before producing the output
 3.Add 3 questions in Aiken format that include right answer: 1 on the theme or the verse, 1 on story and 1 connecting theme and the story.
-4.Produce the output in the following 2 ways:
-1)Story in English 
-2)Translate the  story  in Urdu and produce output in Urdu font
+4.Produce the output in the English
 Rules for creating the story:
 1.If you find a matching story from hadith or tafseer, dramatize that particular story for kids.
 2.Story must have an enticing title and it should be captivating the target audience of 5 to 7 years with a surprising plot twist or a climactic turn 
-3.Use only children as main characters in the story. Use animals as supporting characters to the main characters, only if it makes the story more interesting and captivating.
+3.Use only children as main characters in the story. Use animals as only supporting characters to the main characters, only if it makes the story more interesting and captivating.
 4.If possible, story must be in the form of dialogue or trialogue between the characters
 5.Stories should avoid Disrespectful Terms, Sexual Content, Graphic Violence, Blasphemy, Misuse of Sacred Terms, Cultural Stereotypes, Sensitive Themes like violence, extremism, or terrorism, and misrepresentations that inaccurately represent Islamic teachings or beliefs
 6.Every story should have a moral that is central to the theme mentioned.
 Now, write a story on the theme : {theme}"""
             if custom_prompt:
                 content = custom_prompt + f". Finally , write a story on the theme : {theme}"
+            # Timer start
+            start_time = time.time()
             # Generate story
             try:
                 response = openai.ChatCompletion.create(
@@ -125,18 +136,22 @@ Now, write a story on the theme : {theme}"""
                     ]
                 )
                 story = response['choices'][0]['message']['content']
-                st.write(f"Successfully created story from {theme}")
+                st.write(f'Successfully created story from theme: "{theme}"')
             except:
                 story = "Error in connection"
-                st.write(f"Failed to create story from {theme}")
-
+                st.write(f'Failed to create story from theme: {theme}"')
+            # Calculate the time taken
+            end_time = time.time()
+            time_taken = end_time - start_time
+            st.write(f"Time taken to generate story: {time_taken:.2f} seconds")
+            
             story_list.append(story)
 
             # Save the story to a PDF file
-            pdf_file = save_pdf(f"Story_{index+1}", str(story))
-            pdf_files.append(pdf_file)
+            docx_file = save_word_docx(file_name, str(story))
+            docx_files.append(docx_file)
 
-            st.markdown(f"**Story {index+1}** created and saved as {pdf_file}")
+            st.markdown(f"**Story {index+1}** created and saved as {docx_file}")            
 
         # Combine all stories into a single DataFrame
         df['Story'] = story_list
@@ -146,11 +161,15 @@ Now, write a story on the theme : {theme}"""
         # Create a zip file containing PDFs
         zip_buffer = BytesIO()
         with zipfile.ZipFile(zip_buffer, "w") as zf:
-            for pdf_file in pdf_files:
-                zf.write(pdf_file, os.path.basename(pdf_file))
+            for docx_file in docx_files:
+                zf.write(docx_file, os.path.basename(docx_file))
 
         zip_file_name = "Stories.zip"
         zip_buffer.seek(0)
+        code_end = time.time()
+        total_code_time = code_end - code_start
+        st.write(f"Time taken for the entire code to run: {total_code_time:.2f} seconds")
+        
 
         # Add a download button for the zip file
         st.download_button(
