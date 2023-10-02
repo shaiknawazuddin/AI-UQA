@@ -1,10 +1,12 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
-import os
-import time as ti
-from fpdf import FPDF
 import openai
+from docx import Document
+import zipfile
+import os
+import time
+from io import BytesIO
+
 
 
 
