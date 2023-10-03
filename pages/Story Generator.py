@@ -99,7 +99,7 @@ def output_code(gpt_version, df):
         if gpt_version == "GPT 3.5":
             model = "gpt-3.5-turbo"
         else:
-            model = "gpt-4.0-turbo"
+            model = "gpt-4"
         story_list = []
         df = df.rename(columns = {df.columns[0] : 'Surah Number'})
         docx_files = []  # Keep track of generated Word files
